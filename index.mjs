@@ -17,7 +17,7 @@ const reportError = async ({url, error}) => {
     // setTimeout(() => {
     //     healthyResponseEvent(url);
     // }, 5000);
-    await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -32,7 +32,7 @@ const reportError = async ({url, error}) => {
 
 const reportHealthy = async (url) => {
     console.log('reportHealthy');
-    await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+   const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
