@@ -1,7 +1,8 @@
 import fs from 'fs';
+import path from 'path';
 import {createEffect, createEvent, createStore, sample} from 'effector';
 
-const configRaw = fs.readFileSync('./config.json').toString();
+const configRaw = fs.readFileSync(path.resolve(import.meta.dirname, 'config.json')).toString();
 const config = JSON.parse(configRaw);
 
 const exceptionEvent = createEvent();
@@ -134,6 +135,7 @@ sample({
     source: {counter: $targetExceptionCount, statuses: $targetReportStatus},
     clock: healthyResponseEvent,
     filter: ({counter, statuses}, targetUrl) => statuses.get(targetUrl) !== 'healthy-reported',
+    fn: (_, targetUrl) => targetUrl,
     target: reportHealthyEffect,
 });
 
