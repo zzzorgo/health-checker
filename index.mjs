@@ -1,147 +1,105 @@
 import fs from 'fs';
 import path from 'path';
-import {createEffect, createEvent, createStore, sample} from 'effector';
+import { createEffect, createEvent, createStore, sample } from 'effector';
+import {combineEvents} from 'patronum';
 
 const configRaw = fs.readFileSync(path.resolve(import.meta.dirname, 'config.json')).toString();
 const config = JSON.parse(configRaw);
 
-const exceptionEvent = createEvent();
-const healthyResponseEvent = createEvent();
-const healthyResponseReportedEvent = createEvent();
-const exceptionReportedEvent = createEvent();
-
-const reportError = async ({url, error}) => {
-    console.log('reportError');
-    console.error(error);
-    // exceptionReportedEvent(url);
-
-    // setTimeout(() => {
-    //     healthyResponseEvent(url);
-    // }, 5000);
-    const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+const sendTelegramMessage = async (text) => {
+    return fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({chat_id: config.chatId, text: `URL: ${url}, ${error.message}`}),
+        body: JSON.stringify({ chat_id: config.chatId, text }),
     });
-
-    if (response.ok) {
-        exceptionReportedEvent(url);
-    }
-};
-
-const reportHealthy = async (url) => {
-    console.log('reportHealthy');
-   const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({chat_id: config.chatId, text: `URL: ${url} is now healthy`}),
-    });
-
-    if (response.ok) {
-        healthyResponseReportedEvent(url);
-    }
-};
-
-const $targetExceptionCount = createStore(new Map())
-    .on(exceptionEvent, (state, event) => {
-        const prevCount = state.get(event) ?? 0;
-        state.set(event, prevCount + 1);
-
-        return state;
-    })
-    .on(healthyResponseEvent, (state, event) => {
-        state.set(event, 0);
-
-        return state;
-    });
-
-const $targetReportStatus = createStore(new Map())
-    .on(exceptionEvent, (state, event) => {
-        if (state.get(event) !== 'error-reported') {
-            state.set(event, 'error');
-        }
-
-        return state;
-    })
-    .on(exceptionReportedEvent, (state, event) => {
-        state.set(event, 'error-reported');
-
-        return state;
-    })
-    .on(healthyResponseEvent, (state, event) => {
-        if (state.get(event) !== 'healthy-reported') {
-            state.set(event, 'healthy');
-        }
-
-        return state;
-    })
-    .on(healthyResponseReportedEvent, (state, event) => {
-        state.set(event, 'healthy-reported');
-
-        return state;
-    });
-
-const checkHealth = (target) => {
-    console.log('checkHealth');
-    let timeout = null;
-    const timeoutPromise = new Promise((_, reject) => {
-        timeout = setTimeout(() => {
-            reject();
-        }, 5000);
-    });
-
-    const fetchPromise = fetch(target.url);
-
-    Promise.race([fetchPromise, timeoutPromise])
-        .then(response => {
-            clearTimeout(timeout);
-            if (!response.ok) {
-                exceptionEvent(target.url);
-            } else {
-                healthyResponseEvent(target.url);
-            }
-        }).catch((e) => {
-            exceptionEvent(target.url);
-        });
 }
 
-const checkHealthEffect = createEffect(checkHealth);
-const reportErrorEffect = createEffect(reportError);
-const reportHealthyEffect = createEffect(reportHealthy);
+const createHealthChecker = (target) => {
+    const exceptionEvent = createEvent();
+    const healthyResponseEvent = createEvent();
 
-const getTarget = (targetUrl) => config.targets.find((target) => targetUrl === target.url);
+    const reportError = async ({ error }) => {
+        console.log(`reportError ${target.url}`);
+        console.error(error);
 
-sample({
-    source: {counter: $targetExceptionCount, statuses: $targetReportStatus},
-    clock: exceptionEvent,
-    filter: ({counter, statuses}, targetUrl) => counter.get(targetUrl) < 3 && statuses.get(targetUrl) !== 'error-reported',
-    fn: (_, targetUrl) => getTarget(targetUrl),
-    target: checkHealthEffect,
-});
+        const response = await sendTelegramMessage(`URL: ${target.url}, ${error.message}`);
 
-sample({
-    source: {counter: $targetExceptionCount, statuses: $targetReportStatus},
-    clock: exceptionEvent,
-    filter: ({counter, statuses}, targetUrl) => counter.get(targetUrl) >= 3 && statuses.get(targetUrl) === 'error',
-    fn: (_, targetUrl) => ({url: targetUrl, error: new Error(getTarget(targetUrl).message)}),
-    target: reportErrorEffect,
-});
+        if (!response.ok) {
+            throw new Error('reporting failed');
+        }
+    };
 
-sample({
-    source: {counter: $targetExceptionCount, statuses: $targetReportStatus},
-    clock: healthyResponseEvent,
-    filter: ({counter, statuses}, targetUrl) => statuses.get(targetUrl) !== 'healthy-reported',
-    fn: (_, targetUrl) => targetUrl,
-    target: reportHealthyEffect,
-});
+    const reportHealthy = async () => {
+        console.log(`reportHealthy ${target.url}`);
+        await sendTelegramMessage(`URL: ${target.url} is now healthy`);
+    };
+
+    const checkHealth = () => {
+        console.log(`checkHealth ${target.url}`);
+        let timeout = null;
+        const timeoutPromise = new Promise((_, reject) => {
+            timeout = setTimeout(() => {
+                reject();
+            }, target.checkTimeout);
+        });
+
+        const fetchPromise = fetch(target.url);
+
+        Promise.race([fetchPromise, timeoutPromise])
+            .then(response => {
+                clearTimeout(timeout);
+                if (!response.ok) {
+                    exceptionEvent();
+                } else {
+                    healthyResponseEvent();
+                }
+            }).catch((e) => {
+                exceptionEvent();
+            });
+    }
+
+    const retryCheckHealthEffect = createEffect(checkHealth);
+    const reportErrorEffect = createEffect(reportError);
+    const reportHealthyEffect = createEffect(reportHealthy);
+    const healthRestoredEvent = combineEvents([reportErrorEffect.done, healthyResponseEvent]);
+
+    const $targetExceptionCount = createStore(0)
+        .on(exceptionEvent, (state) => state + 1)
+        .on(healthyResponseEvent, () => 0);
+
+    const $targetReportStatus = createStore('')
+        .on(exceptionEvent, (state) => state === 'error-reported' ? state : 'error')
+        .on(reportErrorEffect.done, () => 'error-reported')
+        .on(healthyResponseEvent, () => 'healthy');
+
+    sample({
+        source: $targetExceptionCount,
+        clock: exceptionEvent,
+        filter: counter => counter < 3,
+        target: retryCheckHealthEffect,
+    });
+
+    sample({
+        source: { counter: $targetExceptionCount, status: $targetReportStatus },
+        clock: exceptionEvent,
+        filter: ({ counter, status }) => counter >= 3 && status !== 'error-reported',
+        fn: () => ({ error: new Error(target.message) }),
+        target: reportErrorEffect,
+    });
+
+    sample({
+        clock: healthRestoredEvent,
+        target: reportHealthyEffect,
+    });
+
+    setInterval(() => checkHealth(target), target.pollInterval);
+};
 
 const run = () => {
     config.targets.forEach((target) => {
-        setInterval(() => checkHealth(target), target.pollInterval);
+        createHealthChecker(target);
     });
 };
 

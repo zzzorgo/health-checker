@@ -3,7 +3,8 @@
         {
             "url": "http://localhost:64115",
             "pollInterval": 60000,
-            "message": "There are problems with home server connectivity. Check wi-fi connection."
+            "message": "There are problems with home server connectivity. Check wi-fi connection.",
+            "checkTimeout": 5000
         }
     ],
     "botToken": "XXX",
