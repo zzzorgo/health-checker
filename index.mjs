@@ -19,6 +19,7 @@ const sendTelegramMessage = async (text) => {
 const createHealthChecker = (target) => {
     const exceptionEvent = createEvent();
     const healthyResponseEvent = createEvent();
+    const resetHealthRestoredEvent = createEvent();
 
     const reportError = async ({ error }) => {
         console.log(`reportError ${target.url}`);
@@ -63,13 +64,16 @@ const createHealthChecker = (target) => {
     const retryCheckHealthEffect = createEffect(checkHealth);
     const reportErrorEffect = createEffect(reportError);
     const reportHealthyEffect = createEffect(reportHealthy);
-    const healthRestoredEvent = combineEvents([reportErrorEffect.done, healthyResponseEvent]);
+    const healthRestoredEvent = combineEvents({
+        events: [reportErrorEffect.done, healthyResponseEvent],
+        reset: resetHealthRestoredEvent,
+    });
 
     const $targetExceptionCount = createStore(0)
         .on(exceptionEvent, (state) => state + 1)
         .on(healthyResponseEvent, () => 0);
 
-    const $targetReportStatus = createStore('')
+    const $targetReportStatus = createStore('initial')
         .on(exceptionEvent, (state) => state === 'error-reported' ? state : 'error')
         .on(reportErrorEffect.done, () => 'error-reported')
         .on(healthyResponseEvent, () => 'healthy');
@@ -87,6 +91,13 @@ const createHealthChecker = (target) => {
         filter: ({ counter, status }) => counter >= 3 && status !== 'error-reported',
         fn: () => ({ error: new Error(target.message) }),
         target: reportErrorEffect,
+    });
+
+    sample({
+        source: $targetReportStatus,
+        clock: exceptionEvent,
+        filter: (status) => status !== 'error-reported',
+        target: resetHealthRestoredEvent,
     });
 
     sample({
