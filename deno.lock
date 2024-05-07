@@ -1,0 +1,22 @@
+{
+  "version": "3",
+  "packages": {
+    "specifiers": {
+      "npm:effector": "npm:effector@23.2.1",
+      "npm:patronum": "npm:patronum@2.2.0_effector@23.2.1"
+    },
+    "npm": {
+      "effector@23.2.1": {
+        "integrity": "sha512-WoqZKLJKWOsq91hpxEpaVzIIlREVNNC5IxgRME8/oXvRmvxi+4ITzwxs9NEc1ygyeVLEKAA7zfpNA7eVJ6RmQg==",
+        "dependencies": {}
+      },
+      "patronum@2.2.0_effector@23.2.1": {
+        "integrity": "sha512-Idsb5swd+2UI1NuBlHJuVA4WlaUeEluZJxGAZ9obCViuEf4pP68bij3f1sZCM/vqqWPsbHclYweDNt/sWu0O1g==",
+        "dependencies": {
+          "effector": "effector@23.2.1"
+        }
+      }
+    }
+  },
+  "remote": {}
+}
