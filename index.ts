@@ -1,12 +1,25 @@
-import fs from 'fs';
-import path from 'path';
-import { createEffect, createEvent, createStore, sample } from 'effector';
-import {combineEvents} from 'patronum';
+import fs from 'node:fs';
+import path from 'node:path';
+import { createEffect, createEvent, createStore, sample } from 'npm:effector';
+import {combineEvents} from 'npm:patronum';
 
-const configRaw = fs.readFileSync(path.resolve(import.meta.dirname, 'config.json')).toString();
-const config = JSON.parse(configRaw);
+type Target = {
+    url: string;
+    pollInterval: number;
+    message: string;
+    checkTimeout: number;
+}
 
-const sendTelegramMessage = async (text) => {
+type Config = {
+    targets: Target[],
+    botToken: string;
+    chatId: number;
+};
+
+const configRaw = fs.readFileSync(path.resolve(import.meta.dirname ?? '', 'config.json')).toString();
+const config: Config = JSON.parse(configRaw);
+
+const sendTelegramMessage = async (text: string) => {
     return fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
         method: 'POST',
         headers: {
@@ -16,12 +29,12 @@ const sendTelegramMessage = async (text) => {
     });
 }
 
-const createHealthChecker = (target) => {
+const createHealthChecker = (target: Target) => {
     const exceptionEvent = createEvent();
     const healthyResponseEvent = createEvent();
     const resetHealthRestoredEvent = createEvent();
 
-    const reportError = async ({ error }) => {
+    const reportError = async (error: Error) => {
         console.log(`reportError ${target.url}`);
         console.error(error);
 
@@ -39,8 +52,8 @@ const createHealthChecker = (target) => {
 
     const checkHealth = () => {
         console.log(`checkHealth ${target.url}`);
-        let timeout = null;
-        const timeoutPromise = new Promise((_, reject) => {
+        let timeout = 0;
+        const timeoutPromise: Promise<Response> = new Promise((_, reject) => {
             timeout = setTimeout(() => {
                 reject();
             }, target.checkTimeout);
@@ -49,14 +62,14 @@ const createHealthChecker = (target) => {
         const fetchPromise = fetch(target.url);
 
         Promise.race([fetchPromise, timeoutPromise])
-            .then(response => {
+            .then((response) => {
                 clearTimeout(timeout);
                 if (!response.ok) {
                     exceptionEvent();
                 } else {
                     healthyResponseEvent();
                 }
-            }).catch((e) => {
+            }).catch(() => {
                 exceptionEvent();
             });
     }
@@ -89,7 +102,7 @@ const createHealthChecker = (target) => {
         source: { counter: $targetExceptionCount, status: $targetReportStatus },
         clock: exceptionEvent,
         filter: ({ counter, status }) => counter >= 3 && status !== 'error-reported',
-        fn: () => ({ error: new Error(target.message) }),
+        fn: () => new Error(target.message),
         target: reportErrorEffect,
     });
 
@@ -105,7 +118,7 @@ const createHealthChecker = (target) => {
         target: reportHealthyEffect,
     });
 
-    setInterval(() => checkHealth(target), target.pollInterval);
+    setInterval(() => checkHealth(), target.pollInterval);
 };
 
 const run = () => {
