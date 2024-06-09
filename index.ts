@@ -23,7 +23,7 @@ const sendTelegramMessage = async (text: string) => {
     return fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
         },
         body: JSON.stringify({ chat_id: config.chatId, text }),
     });
@@ -59,7 +59,12 @@ const createHealthChecker = (target: Target) => {
             }, target.checkTimeout);
         });
 
-        const fetchPromise = fetch(target.url);
+        const fetchPromise = fetch(target.url, {
+            headers: {
+                'Connection': 'keep-alive',
+                'Keep-Alive': 'timeout=5',
+            }
+        });
 
         Promise.race([fetchPromise, timeoutPromise])
             .then((response) => {
