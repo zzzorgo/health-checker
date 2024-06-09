@@ -62,7 +62,7 @@ const createHealthChecker = (target: Target) => {
         const fetchPromise = fetch(target.url, {
             headers: {
                 'Connection': 'keep-alive',
-                'Keep-Alive': 'timeout=5',
+                'Keep-Alive': 'timeout=300',
             }
         });
 
