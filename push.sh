@@ -1,1 +1,1 @@
-docker push dselianin/health-checker:latest
+docker push dselianin/health-checker:1.0
