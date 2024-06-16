@@ -8,6 +8,7 @@ type Target = {
     pollInterval: number;
     message: string;
     checkTimeout: number;
+    retryDelay: number;
 }
 
 type Config = {
@@ -79,7 +80,9 @@ const createHealthChecker = (target: Target) => {
             });
     }
 
-    const retryCheckHealthEffect = createEffect(checkHealth);
+    const retryCheckHealthEffect = createEffect(() => {
+        setTimeout(checkHealth, target.retryDelay);
+    });
     const reportErrorEffect = createEffect(reportError);
     const reportHealthyEffect = createEffect(reportHealthy);
     const healthRestoredEvent = combineEvents({

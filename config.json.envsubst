@@ -4,13 +4,15 @@
             "url": "http://localhost:64115",
             "pollInterval": 60000,
             "message": "🔴 Home server",
-	        "checkTimeout": 5000
+	        "checkTimeout": 5000,
+            "retryDelay": 5000
         },
         {
             "url": "http://localhost:64117/health-check",
             "pollInterval": 60000,
             "message": "🔴 Bryansk server",
-	        "checkTimeout": 5000
+	        "checkTimeout": 5000,
+            "retryDelay": 5000
         }
     ],
     "botToken": "${HEALTH_CHECKER_BOT_TOKEN}",
